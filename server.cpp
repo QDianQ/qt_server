@@ -1,23 +1,67 @@
 #include "server.h"
-
+#include <iostream>
 #include <QStorageInfo>
+#include <QNetworkInterface>
+
 
 Server::Server()
 {
-    timerCheckConnection = new QTimer(this);
-    timerCheckConnection->setInterval(1000);
-    connect(timerCheckConnection, SIGNAL(timeout()), this, SLOT(slotTimerCheckConnection()));
+    int whichAddress;
+    QHostAddress ipAddress;
+    int port = 2323;
+    bool isCorrect = false;
 
-    if(this->listen(QHostAddress("127.0.0.1"), 2323))
+    if (QNetworkInterface::allAddresses().size() > 1)
     {
-        qDebug() << "Server is starting";
+        qDebug() << "More than 1 network interfaces detected\n"
+                    "Which one should be use?\n";
+        for (QHostAddress i : QNetworkInterface::allAddresses())
+        {
+            qDebug() << QNetworkInterface::allAddresses().indexOf(i) + 1 << ": "
+                     << i.toString();
+        }
+    }
 
+
+    while(true)
+    {
+        std::cout << "\nSelect the number: ";
+        if(std::cin >> whichAddress and
+                whichAddress > 0 and
+                whichAddress <= QNetworkInterface::allAddresses().size())
+        {
+            ipAddress = QNetworkInterface::allAddresses().value(whichAddress - 1);
+            break;
+        }
+        else
+        {
+            std::cin.clear();
+            std::cin.ignore(100,'\n');
+
+            qDebug() << "Invalid input ";
+        }
+    }
+    std::cout << std::endl;
+
+
+    if(this->listen(QHostAddress(ipAddress), port))
+    {
+        qDebug() << "Server is starting"
+                 << "\ncurrent IP: " << ipAddress.toString()
+                 << "\ncurrent port: " << port
+                 << "\n\n";
+
+        nextBlockSize = 0;
+
+        timerCheckConnection = new QTimer(this);
+        timerCheckConnection->setInterval(1000);
+        connect(timerCheckConnection, SIGNAL(timeout()), this, SLOT(slotTimerCheckConnection()));
     }
     else
     {
         qDebug() << "Start server is failed";
     }
-    nextBlockSize = 0;
+
 }
 Server::~Server()
 {
@@ -32,10 +76,11 @@ void Server::incomingConnection(qintptr socketDescriptor)
     connect(socket, &QTcpSocket::disconnected, socket, &QTcpSocket::deleteLater);
 
     Sockets.push_back(socket);
-    qDebug() << "Client connected";
-    timerCheckConnection->start();
-}
 
+    timerCheckConnection->start();
+
+    qDebug() << "Client connected";
+}
 void Server::slotReadyRead()
 {
     socket = (QTcpSocket*)sender();
@@ -80,11 +125,13 @@ void Server::slotReadyRead()
 }
 
 void Server::slotTimerCheckConnection()
-{
+{    
     if (QAbstractSocket::UnconnectedState == socket->state())
-    {
+    {   
         qDebug() << "Client was disconnected";
         timerCheckConnection->stop();
+        Sockets.pop_front();
+        Sockets.indexOf(socket);
     }
 }
 
